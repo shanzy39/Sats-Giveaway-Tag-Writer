@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sats Giveaway Tag Writer</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2a3240;
+    --txt:#e6edf3; --dim:#9aa6b2; --accent:#f7931a; --accent2:#ffb454;
+    --ok:#3fb950; --bad:#f85149; --warn:#d29922;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--txt);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    padding:24px 16px 64px;
+  }
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 2px;display:flex;align-items:center;gap:10px}
+  h1 .b{color:var(--accent)}
+  .sub{color:var(--dim);margin:0 0 22px;font-size:13.5px}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px;margin:0 0 16px;
+  }
+  label{display:block;font-weight:600;margin:0 0 6px;font-size:13.5px}
+  .hint{color:var(--dim);font-size:12.5px;margin:6px 0 0}
+  textarea,input[type=text]{
+    width:100%;background:var(--bg);color:var(--txt);border:1px solid var(--line);
+    border-radius:8px;padding:10px 12px;font:13px/1.45 var(--mono);resize:vertical;
+  }
+  textarea{min-height:84px}
+  textarea:focus,input:focus{outline:none;border-color:var(--accent)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{
+    background:var(--panel2);color:var(--dim);border:0;padding:8px 14px;
+    font:600 13px var(--mono);cursor:pointer;border-right:1px solid var(--line)
+  }
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--accent);color:#1a1205}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dim);cursor:pointer}
+  .chk input{width:16px;height:16px;accent-color:var(--accent)}
+  .btn{
+    background:var(--accent);color:#1a1205;border:0;border-radius:8px;
+    padding:11px 18px;font:700 14px system-ui;cursor:pointer
+  }
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  .status{font-size:13px;margin:10px 0 0;min-height:18px}
+  .status.ok{color:var(--ok)} .status.bad{color:var(--bad)} .status.warn{color:var(--warn)}
+  .decoded{
+    background:var(--panel2);border:1px dashed var(--line);border-radius:8px;
+    padding:10px 12px;font:12.5px/1.5 var(--mono);word-break:break-all;color:var(--dim);
+    margin:10px 0 0;display:none
+  }
+  .decoded b{color:var(--txt)}
+  .meter{margin:14px 0 0}
+  .meter .barwrap{background:var(--bg);border:1px solid var(--line);border-radius:6px;height:16px;overflow:hidden}
+  .meter .bar{height:100%;width:0;background:var(--ok);transition:width .15s,background .15s}
+  .meter .lbl{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--dim);margin:0 0 6px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:620px){.grid{grid-template-columns:1fr}}
+  .qrbox{background:#fff;border-radius:8px;padding:14px;display:flex;align-items:center;justify-content:center;min-height:200px}
+  .qrbox canvas{image-rendering:pixelated;width:100%;max-width:240px;height:auto}
+  .qrbox .empty{color:#888;font-size:13px}
+  .outhead{font-weight:600;margin:0 0 10px;font-size:14px}
+  .note{
+    background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.35);
+    border-radius:8px;padding:12px 14px;font-size:12.5px;color:#e3c07a;margin:0 0 16px
+  }
+  .note b{color:var(--warn)}
+  .steps{font-size:12.5px;color:var(--dim);margin:12px 0 0;padding-left:18px}
+  .steps li{margin:4px 0}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font:12px var(--mono)}
+  .foot{color:var(--dim);font-size:12px;text-align:center;margin:26px 0 0}
+  a{color:var(--accent2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="b">&#9889;</span> Sats Giveaway Tag Writer</h1>
+  <p class="sub">Paste a Lightning <b>LNURL-withdraw</b> link &rarr; get a QR + a Flipper <code>.nfc</code> file you can write to an NFC tag. 100% offline &middot; nothing is sent anywhere &middot; no wallet access.</p>
+
+  <div class="note">
+    <b>Treat tags like cash.</b> An LNURL-withdraw link is a <i>bearer</i> claim &mdash; anyone who taps or scans it can withdraw the sats. Use a <b>single-use</b> withdraw config on your backend so each tag can only be claimed once. This tool never touches your wallet; it only encodes a link you already created.
+  </div>
+
+  <div class="card">
+    <label for="in">LNURL-withdraw link</label>
+    <textarea id="in" placeholder="LNURL1DP68GURN8GHJ7...   (or  lightning:LNURL1...   or  lnurlw://...   or  https://...)" spellcheck="false"></textarea>
+    <p class="hint">Create this on your own Lightning backend (e.g. a self-hosted LNbits &rarr; Withdraw Links). Paste the finished link here.</p>
+    <div id="st" class="status"></div>
+    <div id="dec" class="decoded"></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <label style="margin-bottom:8px">Tag type</label>
+        <div class="seg" id="seg">
+          <button data-tag="213">NTAG213</button>
+          <button data-tag="215">NTAG215</button>
+          <button data-tag="216" class="on">NTAG216</button>
+        </div>
+      </div>
+      <label class="chk" style="align-self:flex-end" title="Most wallets recognize the lightning: URI scheme">
+        <input type="checkbox" id="prefix" checked> include <code>lightning:</code> prefix
+      </label>
+    </div>
+
+    <div class="meter">
+      <div class="lbl"><span>tag memory used</span><span id="meterTxt">0 / 888 bytes</span></div>
+      <div class="barwrap"><div class="bar" id="bar"></div></div>
+      <div id="fitMsg" class="hint"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="outhead">QR (print / phone fallback)</div>
+      <div class="qrbox"><div id="qr" class="empty">Paste a link to preview</div></div>
+      <button class="btn ghost" id="dlpng" style="margin-top:12px;width:100%" disabled>Download QR (PNG)</button>
+    </div>
+    <div class="card">
+      <div class="outhead">Flipper NFC file</div>
+      <p class="hint" style="margin-top:0">Writes an NDEF URI record onto a blank NTAG21x.</p>
+      <button class="btn" id="dlnfc" style="width:100%" disabled>Download .nfc file</button>
+      <ol class="steps">
+        <li>Copy the <code>.nfc</code> file to <code>/ext/nfc/</code> on your Flipper SD card.</li>
+        <li>Open <b>NFC &rarr; Saved</b>, pick the file.</li>
+        <li>Choose <b>Write</b>, then hold a blank tag to the Flipper.</li>
+        <li>Tap the tag with a phone to test the claim before giving it away.</li>
+      </ol>
+    </div>
+  </div>
+
+  <p class="foot">Single-file &middot; client-side &middot; no tracking. The decoded link stays in your browser.</p>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   Sats Giveaway Tag Writer
+   - bech32 decode (LNURL) for validation/preview
+   - self-contained QR generator (byte mode, versions 1-13, ECC L/M)
+   - Flipper .nfc encoder for NTAG213/215/216 (NDEF URI record)
+   ========================================================================= */
+
+/* ---------------- bech32 (LNURL uses classic bech32, not bech32m) -------- */
+const B32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+function bech32Polymod(values){
+  const GEN=[0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
+  let chk=1;
+  for(const v of values){
+    const b=chk>>>25;
+    chk=((chk&0x1ffffff)<<5)^v;
+    for(let i=0;i<5;i++) if((b>>>i)&1) chk^=GEN[i];
+  }
+  return chk>>>0;
+}
+function bech32HrpExpand(hrp){
+  const out=[];
+  for(let i=0;i<hrp.length;i++) out.push(hrp.charCodeAt(i)>>>5);
+  out.push(0);
+  for(let i=0;i<hrp.length;i++) out.push(hrp.charCodeAt(i)&31);
+  return out;
+}
+function bech32Decode(str){
+  str=str.toLowerCase();
+  const pos=str.lastIndexOf("1");
+  if(pos<1||pos+7>str.length) throw new Error("not a valid LNURL (bech32 structure)");
+  const hrp=str.slice(0,pos);
+  const data=[];
+  for(let i=pos+1;i<str.length;i++){
+    const d=B32.indexOf(str[i]);
+    if(d===-1) throw new Error("invalid character in LNURL");
+    data.push(d);
+  }
+  const chk=bech32Polymod(bech32HrpExpand(hrp).concat(data));
+  if(chk!==1) throw new Error("LNURL checksum failed (link may be truncated)");
+  return {hrp,data:data.slice(0,data.length-6)};
+}
+function convert5to8(data){
+  let acc=0,bits=0;const out=[];
+  for(const v of data){
+    acc=(acc<<5)|v;bits+=5;
+    while(bits>=8){bits-=8;out.push((acc>>>bits)&0xff);}
+  }
+  return out;
+}
+/* Decode an LNURL string to its target URL (for human verification only). */
+function lnurlToUrl(s){
+  const {hrp,data}=bech32Decode(s);
+  if(hrp!=="lnurl") throw new Error('expected an "lnurl" prefix');
+  const bytes=convert5to8(data);
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
+
+/* ----------------------------- QR generator ------------------------------
+   Compact byte-mode encoder. Algorithm after Project Nayuki (MIT).
+   Supports versions 1-13 at ECC level L or M (enough for any LNURL).      */
+const QR=(function(){
+  // [version] -> ecc codewords per block / number of blocks, levels L & M
+  const ECC={
+    L:{cw:[0,7,10,15,20,26,18,20,24,30,18,20,24,26],nb:[0,1,1,1,1,1,2,2,2,2,4,4,4,4]},
+    M:{cw:[0,10,16,26,18,24,16,18,22,22,26,30,22,22],nb:[0,1,1,1,2,2,4,4,4,5,5,5,8,9]}
+  };
+  // GF(256) tables
+  const EXP=new Uint8Array(512),LOG=new Uint8Array(256);
+  (function(){let x=1;for(let i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x&0x100)x^=0x11d;}for(let i=255;i<512;i++)EXP[i]=EXP[i-255];})();
+  const gmul=(a,b)=>(a===0||b===0)?0:EXP[LOG[a]+LOG[b]];
+
+  function rawModules(ver){
+    let r=(16*ver+128)*ver+64;
+    if(ver>=2){const na=Math.floor(ver/7)+2;r-=(25*na-10)*na-55;if(ver>=7)r-=36;}
+    return r;
+  }
+  function rsDivisor(deg){
+    const res=new Uint8Array(deg);res[deg-1]=1;
+    let root=1;
+    for(let i=0;i<deg;i++){
+      for(let j=0;j<deg;j++){
+        res[j]=gmul(res[j],root);
+        if(j+1<deg) res[j]^=res[j+1];
+      }
+      root=gmul(root,2);
+    }
+    return res;
+  }
+  function rsRemainder(data,div){
+    const res=new Uint8Array(div.length);
+    for(const b of data){
+      const factor=b^res[0];
+      res.copyWithin(0,1);res[res.length-1]=0;
+      for(let i=0;i<div.length;i++) res[i]^=gmul(div[i],factor);
+    }
+    return res;
+  }
+
+  function chooseVersion(len,ecl){
+    for(let v=1;v<=13;v++){
+      const cw=Math.floor(rawModules(v)/8);
+      const totalEcc=ECC[ecl].cw[v]*ECC[ecl].nb[v];
+      const dataCw=cw-totalEcc;
+      const cci=v<=9?8:16;
+      const need=4+cci+8*len; // mode + char-count + payload, bits
+      if(need+4<=dataCw*8) return {ver:v,dataCw,cw};
+    }
+    return null;
+  }
+
+  function encode(text){
+    const bytes=new TextEncoder().encode(text);
+    // pick smallest version; prefer ECC M, fall back to L for long links
+    let pick=null,ecl=null;
+    for(const lv of ["M","L"]){const p=chooseVersion(bytes.length,lv);if(p){pick=p;ecl=lv;break;}}
+    if(!pick) throw new Error("link too long for a single QR (shorten the LNURL)");
+    const {ver,dataCw}=pick;
+    const size=ver*4+17;
+
+    // ---- build data codeword stream (bit buffer) ----
+    const bb=[];
+    const put=(val,len)=>{for(let i=len-1;i>=0;i--)bb.push((val>>>i)&1);};
+    put(4,4);                          // byte mode
+    put(bytes.length, ver<=9?8:16);    // char count
+    for(const b of bytes) put(b,8);
+    // terminator + pad to byte
+    const cap=dataCw*8;
+    for(let i=0;i<4&&bb.length<cap;i++) bb.push(0);
+    while(bb.length%8!==0) bb.push(0);
+    const dataBytes=[];
+    for(let i=0;i<bb.length;i+=8){let b=0;for(let j=0;j<8;j++)b=(b<<1)|bb[i+j];dataBytes.push(b);}
+    // pad bytes
+    for(let pad=0xec;dataBytes.length<dataCw;pad^=0xec^0x11) dataBytes.push(pad);
+
+    // ---- split into blocks, compute ECC, interleave ----
+    const numBlocks=ECC[ecl].nb[ver];
+    const eccLen=ECC[ecl].cw[ver];
+    const shortLen=Math.floor(dataCw/numBlocks);
+    const numLong=dataCw%numBlocks;
+    const div=rsDivisor(eccLen);
+    const dataBlocks=[],eccBlocks=[];
+    let off=0;
+    for(let b=0;b<numBlocks;b++){
+      const dlen=shortLen+(b>=numBlocks-numLong?1:0);
+      const blk=dataBytes.slice(off,off+dlen);off+=dlen;
+      dataBlocks.push(blk);
+      eccBlocks.push(rsRemainder(blk,div));
+    }
+    const maxData=shortLen+(numLong>0?1:0);
+    const result=[];
+    for(let i=0;i<maxData;i++) for(let b=0;b<numBlocks;b++) if(i<dataBlocks[b].length) result.push(dataBlocks[b][i]);
+    for(let i=0;i<eccLen;i++) for(let b=0;b<numBlocks;b++) result.push(eccBlocks[b][i]);
+
+    // ---- matrix ----
+    const mod=Array.from({length:size},()=>new Int8Array(size).fill(-1)); // -1 = unset
+    const setFn=(x,y,v)=>{mod[y][x]=v?1:0;};
+    // finder + separators
+    function finder(cx,cy){
+      for(let dy=-1;dy<=7;dy++)for(let dx=-1;dx<=7;dx++){
+        const x=cx+dx,y=cy+dy;if(x<0||x>=size||y<0||y>=size)continue;
+        const d=Math.max(Math.abs(dx-3),Math.abs(dy-3));
+        setFn(x,y,(d!==2&&d!==4));
+      }
+    }
+    finder(0,0);finder(size-7,0);finder(0,size-7);
+    // timing
+    for(let i=0;i<size;i++){if(mod[6][i]<0)setFn(i,6,i%2===0);if(mod[i][6]<0)setFn(6,i,i%2===0);}
+    // alignment
+    function alignPos(v){
+      if(v===1)return[];
+      const n=Math.floor(v/7)+2;const last=size-7;
+      if(v===1)return[];
+      const step=(v===2)?0:Math.ceil((last-6)/(n-1)/2)*2;
+      const pos=[6];for(let i=last;pos.length<n;i-=step)pos.unshift(i);return pos;
+    }
+    const ap=alignPos(ver);
+    for(const ax of ap)for(const ay of ap){
+      if((ax<8&&ay<8)||(ax<8&&ay>size-9)||(ax>size-9&&ay<8))continue;
+      for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+        const d=Math.max(Math.abs(dx),Math.abs(dy));setFn(ax+dx,ay+dy,d!==1);
+      }
+    }
+    // dark module + reserve format/version areas (mark as set=0 placeholder)
+    setFn(8,size-8,true);
+    const reserve=(x,y)=>{if(mod[y][x]<0)mod[y][x]=0;};
+    for(let i=0;i<9;i++){reserve(i,8);reserve(8,i);}
+    for(let i=0;i<8;i++){reserve(size-1-i,8);reserve(8,size-1-i);}
+    if(ver>=7){
+      for(let i=0;i<6;i++)for(let j=0;j<3;j++){reserve(size-11+j,i);reserve(i,size-11+j);}
+    }
+
+    // ---- place data with zigzag ----
+    let di=0;
+    const getBit=(idx)=>(result[idx>>>3]>>>(7-(idx&7)))&1;
+    for(let col=size-1;col>0;col-=2){
+      if(col===6)col--;
+      for(let r=0;r<size;r++){
+        for(let c=0;c<2;c++){
+          const x=col-c;
+          const upward=((col+1)&2)===0;
+          const y=upward?size-1-r:r;
+          if(mod[y][x]<0){
+            let bit=di<result.length*8?getBit(di):0;di++;
+            mod[y][x]=bit;
+          }
+        }
+      }
+    }
+
+    // ---- mask + format, evaluate 8 masks ----
+    const maskFns=[
+      (x,y)=>((x+y)%2===0),(x,y)=>(y%2===0),(x,y)=>(x%3===0),
+      (x,y)=>((x+y)%3===0),(x,y)=>((Math.floor(y/2)+Math.floor(x/3))%2===0),
+      (x,y)=>(((x*y)%2)+((x*y)%3)===0),(x,y)=>((((x*y)%2)+((x*y)%3))%2===0),
+      (x,y)=>((((x+y)%2)+((x*y)%3))%2===0)
+    ];
+    // function-pattern mask (which modules are data)
+    const isData=Array.from({length:size},()=>new Uint8Array(size));
+    // recompute by re-marking function modules: easiest = track a clone before data fill.
+    // Rebuild a function map:
+    const fmask=buildFunctionMap(size,ver,ap);
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++)isData[y][x]=fmask[y][x]?0:1;
+
+    function applyFmtAndMask(maskNo){
+      const m=mod.map(r=>Int8Array.from(r));
+      for(let y=0;y<size;y++)for(let x=0;x<size;x++)
+        if(isData[y][x]&&maskFns[maskNo](x,y)) m[y][x]^=1;
+      drawFormat(m,size,ecl,maskNo);
+      if(ver>=7) drawVersion(m,size,ver);
+      return m;
+    }
+    let best=null,bestPen=1e9,bestNo=0;
+    for(let n=0;n<8;n++){const m=applyFmtAndMask(n);const p=penalty(m,size);if(p<bestPen){bestPen=p;best=m;bestNo=n;}}
+    return best;
+  }
+
+  function buildFunctionMap(size,ver,ap){
+    const f=Array.from({length:size},()=>new Uint8Array(size));
+    const mark=(x,y)=>{if(x>=0&&x<size&&y>=0&&y<size)f[y][x]=1;};
+    function fnd(cx,cy){for(let dy=-1;dy<=7;dy++)for(let dx=-1;dx<=7;dx++)mark(cx+dx,cy+dy);}
+    fnd(0,0);fnd(size-7,0);fnd(0,size-7);
+    for(let i=0;i<size;i++){mark(i,6);mark(6,i);}
+    for(const ax of ap)for(const ay of ap){
+      if((ax<8&&ay<8)||(ax<8&&ay>size-9)||(ax>size-9&&ay<8))continue;
+      for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)mark(ax+dx,ay+dy);
+    }
+    for(let i=0;i<9;i++){mark(i,8);mark(8,i);}
+    for(let i=0;i<8;i++){mark(size-1-i,8);mark(8,size-1-i);}
+    mark(8,size-8);
+    if(ver>=7){for(let i=0;i<6;i++)for(let j=0;j<3;j++){mark(size-11+j,i);mark(i,size-11+j);}}
+    return f;
+  }
+  function drawFormat(m,size,ecl,mask){
+    const eclBits={M:0,L:1}[ecl];
+    let data=(eclBits<<3)|mask;
+    let rem=data;
+    for(let i=0;i<10;i++)rem=(rem<<1)^(((rem>>>9)&1)*0x537);
+    const bits=((data<<10)|rem)^0x5412;
+    const set=(x,y,v)=>{m[y][x]=v;};
+    for(let i=0;i<=5;i++)set(8,i,(bits>>>i)&1);
+    set(8,7,(bits>>>6)&1);set(8,8,(bits>>>7)&1);set(7,8,(bits>>>8)&1);
+    for(let i=9;i<15;i++)set(14-i,8,(bits>>>i)&1);
+    for(let i=0;i<8;i++)set(size-1-i,8,(bits>>>i)&1);
+    for(let i=8;i<15;i++)set(8,size-15+i,(bits>>>i)&1);
+    set(8,size-8,1);
+  }
+  function drawVersion(m,size,ver){
+    let rem=ver;
+    for(let i=0;i<12;i++)rem=(rem<<1)^(((rem>>>11)&1)*0x1f25);
+    const bits=(ver<<12)|rem;
+    for(let i=0;i<18;i++){
+      const b=(bits>>>i)&1;const a=size-11+(i%3),c=Math.floor(i/3);
+      m[c][a]=b;m[a][c]=b;
+    }
+  }
+  function penalty(m,size){
+    let p=0;
+    // rule 1: runs
+    for(let y=0;y<size;y++){let rc=1;for(let x=1;x<size;x++){if(m[y][x]===m[y][x-1]){rc++;if(rc===5)p+=3;else if(rc>5)p++;}else rc=1;}}
+    for(let x=0;x<size;x++){let rc=1;for(let y=1;y<size;y++){if(m[y][x]===m[y-1][x]){rc++;if(rc===5)p+=3;else if(rc>5)p++;}else rc=1;}}
+    // rule 2: 2x2 blocks
+    for(let y=0;y<size-1;y++)for(let x=0;x<size-1;x++){const v=m[y][x];if(v===m[y][x+1]&&v===m[y+1][x]&&v===m[y+1][x+1])p+=3;}
+    // rule 3: finder-like patterns
+    const pat=[1,0,1,1,1,0,1];
+    function look(arr){for(let i=0;i+11<=arr.length;i++){let ok=true;for(let k=0;k<7;k++)if(arr[i+k]!==pat[k]){ok=false;break;}if(ok){let z1=true;for(let k=7;k<11;k++)if(arr[i+k]!==0){z1=false;break;}if(z1)p+=40;}let ok2=true;for(let k=0;k<4;k++)if(arr[i+k]!==0){ok2=false;break;}if(ok2){let g=true;for(let k=0;k<7;k++)if(arr[i+4+k]!==pat[k]){g=false;break;}if(g)p+=40;}}}
+    for(let y=0;y<size;y++){const row=[];for(let x=0;x<size;x++)row.push(m[y][x]);look(row);}
+    for(let x=0;x<size;x++){const col=[];for(let y=0;y<size;y++)col.push(m[y][x]);look(col);}
+    // rule 4: dark ratio
+    let dark=0;for(let y=0;y<size;y++)for(let x=0;x<size;x++)dark+=m[y][x];
+    const pct=dark*100/(size*size);const k=Math.floor(Math.abs(pct-50)/5);p+=k*10;
+    return p;
+  }
+
+  function render(matrix,canvas,scale,quiet){
+    scale=scale||6;quiet=quiet==null?4:quiet;
+    const size=matrix.length;const dim=(size+quiet*2)*scale;
+    canvas.width=dim;canvas.height=dim;
+    const ctx=canvas.getContext("2d");
+    ctx.fillStyle="#fff";ctx.fillRect(0,0,dim,dim);
+    ctx.fillStyle="#000";
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++)
+      if(matrix[y][x])ctx.fillRect((x+quiet)*scale,(y+quiet)*scale,scale,scale);
+  }
+  return {encode,render};
+})();
+
+/* ----------------------------- Flipper .nfc ------------------------------ */
+const TAGS={
+  213:{pages:45, cc:0x12, sv:0x0f, user:144},
+  215:{pages:135,cc:0x3e, sv:0x11, user:504},
+  216:{pages:231,cc:0x6d, sv:0x13, user:888}
+};
+/* Build the NDEF TLV bytes for a URI record carrying `uri` (no prefix code). */
+function ndefUriTlv(uri){
+  const u=new TextEncoder().encode(uri);
+  const payloadLen=u.length+1;           // +1 for URI prefix byte (0x00 = none)
+  const rec=[];
+  const sr=payloadLen<=255;
+  rec.push(sr?0xd1:0xc1);                 // MB+ME+(SR)+TNF=well-known
+  rec.push(0x01);                         // type length
+  if(sr) rec.push(payloadLen);
+  else rec.push((payloadLen>>>24)&0xff,(payloadLen>>>16)&0xff,(payloadLen>>>8)&0xff,payloadLen&0xff);
+  rec.push(0x55);                         // 'U'
+  rec.push(0x00);                         // prefix: none
+  for(const b of u) rec.push(b);
+  // wrap in NDEF-message TLV
+  const tlv=[0x03];
+  if(rec.length<255) tlv.push(rec.length);
+  else tlv.push(0xff,(rec.length>>>8)&0xff,rec.length&0xff);
+  for(const b of rec) tlv.push(b);
+  tlv.push(0xfe);                         // terminator
+  return tlv;
+}
+function buildNfcFile(uri,tagType){
+  const t=TAGS[tagType];
+  const mem=new Uint8Array(t.pages*4);
+  // pages 0-2: placeholder UID/lock (real UID applied at write time)
+  mem.set([0x04,0x11,0x22,0x9d, 0x33,0x44,0x55,0x66, 0xdd,0x48,0x00,0x00],0);
+  // page 3: capability container
+  mem.set([0xe1,0x10,t.cc,0x00],12);
+  // page 4+: NDEF
+  const tlv=ndefUriTlv(uri);
+  const maxUser=t.user; // bytes available from page 4
+  if(tlv.length>maxUser) return {tooBig:true,used:tlv.length,cap:maxUser};
+  mem.set(tlv,16);
+  // assemble text file
+  const hex=b=>b.toString(16).toUpperCase().padStart(2,"0");
+  let s="";
+  s+="Filetype: Flipper NFC device\n";
+  s+="Version: 4\n";
+  s+="Device type: NTAG/Ultralight\n";
+  s+="UID: 04 11 22 33 44 55 66\n";
+  s+="ATQA: 00 44\n";
+  s+="SAK: 00\n";
+  s+="Data format version: 2\n";
+  s+="NTAG/Ultralight type: NTAG"+tagType+"\n";
+  s+="Signature: "+Array(32).fill("00").join(" ")+"\n";
+  s+="Mifare version: 00 04 04 02 01 00 "+hex(t.sv)+" 03\n";
+  s+="Counter 0: 0\nTearing 0: 00\nCounter 1: 0\nTearing 1: 00\nCounter 2: 0\nTearing 2: 00\n";
+  s+="Pages total: "+t.pages+"\n";
+  s+="Pages read: "+t.pages+"\n";
+  for(let p=0;p<t.pages;p++){
+    s+="Page "+p+": "+hex(mem[p*4])+" "+hex(mem[p*4+1])+" "+hex(mem[p*4+2])+" "+hex(mem[p*4+3])+"\n";
+  }
+  s+="Failed authentication attempts: 0\n";
+  return {text:s,used:tlv.length,cap:maxUser};
+}
+
+/* ------------------------------- UI wiring ------------------------------- */
+const $=id=>document.getElementById(id);
+let state={tag:216,uri:null,matrix:null,raw:""};
+
+function normalizeInput(v){
+  v=v.trim();
+  if(!v) return null;
+  let work=v;
+  // strip a lightning:/lnurlw: scheme for detection but remember original intent
+  const low=work.toLowerCase();
+  let lnurl=null,url=null;
+  if(low.startsWith("lightning:")) work=work.slice(10).trim();
+  const w2=work.toLowerCase();
+  if(w2.startsWith("lnurl1")){ lnurl=work; }
+  else if(w2.startsWith("lnurlw://")){ url="https://"+work.slice(9); }
+  else if(w2.startsWith("https://")){ url=work; }
+  else if(w2.startsWith("lnurl")){ lnurl=work; }
+  else { lnurl=work; } // assume bech32 without scheme
+  return {lnurl,url,rawStripped:work};
+}
+
+function update(){
+  const raw=$("in").value;
+  state.raw=raw;
+  const st=$("st"),dec=$("dec");
+  const parsed=normalizeInput(raw);
+  // reset outputs
+  function disableOut(){state.uri=null;state.matrix=null;state.nfc=null;$("dlnfc").disabled=true;$("dlpng").disabled=true;$("fitMsg").textContent="";}
+
+  if(!parsed){st.textContent="";st.className="status";dec.style.display="none";disableOut();drawQR(null);meter(0);return;}
+
+  let decodedUrl=null, valid=false, warn="";
+  if(parsed.lnurl){
+    try{
+      decodedUrl=lnurlToUrl(parsed.lnurl);
+      valid=true;
+    }catch(e){
+      st.className="status bad";st.textContent="\u2715 "+e.message;
+      dec.style.display="none";disableOut();drawQR(null);meter(0);return;
+    }
+  } else if(parsed.url){
+    decodedUrl=parsed.url; valid=true;
+    warn=" (raw URL \u2014 not a bech32 LNURL; most tap-to-claim wallets expect an LNURL1 string)";
+  }
+
+  // sanity hint: does it look like a withdraw endpoint?
+  let looksWithdraw=false;
+  if(decodedUrl){
+    const dl=decodedUrl.toLowerCase();
+    looksWithdraw=dl.includes("withdraw")||dl.includes("lnurlw")||dl.includes("/api/v1/lnurl");
+  }
+
+  // final URI to write
+  const usePrefix=$("prefix").checked;
+  const core=parsed.lnurl?parsed.lnurl.toUpperCase():parsed.url;
+  state.uri=(usePrefix?"lightning:":"")+core;
+
+  // status
+  st.className="status ok";
+  st.textContent="\u2713 Valid LNURL"+(warn?"":"")+(looksWithdraw?" \u00b7 looks like a withdraw link":"");
+  if(warn){st.className="status warn";st.textContent="\u26a0 Accepted"+warn;}
+  else if(!looksWithdraw){st.className="status warn";st.textContent="\u2713 Valid bech32 \u2014 but couldn't confirm it's a *withdraw* link. Double-check the decoded target.";}
+
+  dec.style.display="block";
+  dec.innerHTML="<b>Decoded target:</b> "+escapeHtml(decodedUrl)+"<br><b>Writing to tag:</b> "+escapeHtml(state.uri);
+
+  // QR
+  try{
+    state.matrix=QR.encode(state.uri);
+    drawQR(state.matrix);
+    $("dlpng").disabled=false;
+  }catch(e){
+    drawQR(null);$("dlpng").disabled=true;
+    st.className="status bad";st.textContent="\u2715 "+e.message;
+  }
+
+  // .nfc fit check + meter
+  const built=buildNfcFile(state.uri,state.tag);
+  if(built.tooBig){
+    meter(built.used,built.cap);
+    $("fitMsg").innerHTML="<span style='color:var(--bad)'>Won't fit on NTAG"+state.tag+" ("+built.used+" / "+built.cap+" bytes). Use a larger tag (216) or a shorter LNURL.</span>";
+    $("dlnfc").disabled=true;
+    state.nfc=null;
+  }else{
+    meter(built.used,built.cap);
+    $("fitMsg").innerHTML="Fits NTAG"+state.tag+" \u00b7 "+built.used+" / "+built.cap+" bytes used.";
+    $("dlnfc").disabled=false;
+    state.nfc=built.text;
+  }
+}
+
+function meter(used,cap){
+  cap=cap||TAGS[state.tag].user;
+  const pct=Math.min(100,Math.round(used/cap*100));
+  $("bar").style.width=pct+"%";
+  $("bar").style.background = used>cap?"var(--bad)":(pct>85?"var(--warn)":"var(--ok)");
+  $("meterTxt").textContent=used+" / "+cap+" bytes";
+}
+function drawQR(matrix){
+  const box=$("qr");
+  if(!matrix){box.outerHTML='<div id="qr" class="empty">Paste a link to preview</div>';return;}
+  let canvas=document.getElementById("qrCanvas");
+  if(!canvas||box.tagName!=="CANVAS"){
+    box.outerHTML='<canvas id="qr" class="qrCanvasTag"></canvas>';
+    canvas=document.getElementById("qr");
+  }
+  QR.render(matrix,canvas,6,4);
+}
+function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+/* events */
+$("in").addEventListener("input",update);
+$("prefix").addEventListener("change",update);
+$("seg").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;
+  state.tag=parseInt(b.dataset.tag,10);
+  [...$("seg").children].forEach(c=>c.classList.toggle("on",c===b));
+  update();
+});
+$("dlnfc").addEventListener("click",()=>{
+  if(!state.nfc)return;
+  const blob=new Blob([state.nfc],{type:"text/plain"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="sats_giveaway_NTAG"+state.tag+".nfc";
+  a.click();URL.revokeObjectURL(a.href);
+});
+$("dlpng").addEventListener("click",()=>{
+  const c=document.getElementById("qr");
+  if(!c||c.tagName!=="CANVAS")return;
+  const a=document.createElement("a");a.href=c.toDataURL("image/png");a.download="sats_giveaway_qr.png";a.click();
+});
+update();
+</script>
+</body>
+</html>
