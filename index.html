@@ -127,6 +127,12 @@
     </div>
   </div>
 
+  <div class="card">
+    <label>File name <span style="font-weight:400;color:var(--dim)">(optional)</span></label>
+    <input type="text" id="fname" placeholder="sats_voucher_NTAG216" spellcheck="false" autocomplete="off">
+    <p class="hint">Used for both downloads. The <code>.nfc</code> / <code>.png</code> extension is added automatically. Leave blank to use the default name.</p>
+  </div>
+
   <div class="grid">
     <div class="card">
       <div class="outhead">QR (print / phone fallback)</div>
@@ -674,6 +680,7 @@ $("seg").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   state.tag=parseInt(b.dataset.tag,10);
   [...$("seg").children].forEach(c=>c.classList.toggle("on",c===b));
+  syncFnamePlaceholder();
   update();
 });
 $("modeSeg").addEventListener("click",e=>{
@@ -686,21 +693,28 @@ $("modeSeg").addEventListener("click",e=>{
   $("modeHint").textContent=state.mode==="voucher"
     ? "Tapping opens the branded Unbank voucher page (logo, amount, QR, wallet buttons). Larger payload \u2014 needs NTAG215 or 216."
     : "Tapping opens the recipient's Lightning wallet directly with the LNURL-withdraw claim.";
+  syncFnamePlaceholder();
   update();
 });
+/* download filename: custom (sanitized) or per-mode default */
+function defaultName(){return (state.mode==="voucher"?"sats_voucher_NTAG":"sats_giveaway_NTAG")+state.tag;}
+function sanitizeName(s){return s.trim().replace(/[\/\\:*?"<>|]+/g,"_").replace(/\.(nfc|png)$/i,"").slice(0,80);}
+function baseName(){return sanitizeName($("fname").value)||defaultName();}
+function syncFnamePlaceholder(){$("fname").placeholder=defaultName();}
 $("dlnfc").addEventListener("click",()=>{
   if(!state.nfc)return;
   const blob=new Blob([state.nfc],{type:"text/plain"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=(state.mode==="voucher"?"sats_voucher_NTAG":"sats_giveaway_NTAG")+state.tag+".nfc";
+  a.download=baseName()+".nfc";
   a.click();URL.revokeObjectURL(a.href);
 });
 $("dlpng").addEventListener("click",()=>{
   const c=document.getElementById("qr");
   if(!c||c.tagName!=="CANVAS")return;
-  const a=document.createElement("a");a.href=c.toDataURL("image/png");a.download="sats_giveaway_qr.png";a.click();
+  const a=document.createElement("a");a.href=c.toDataURL("image/png");a.download=baseName()+".png";a.click();
 });
+syncFnamePlaceholder();
 update();
 </script>
 </body>
