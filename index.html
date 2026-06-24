@@ -97,6 +97,15 @@
   </div>
 
   <div class="card">
+    <label style="margin-bottom:8px">What the tag opens</label>
+    <div class="seg" id="modeSeg">
+      <button data-mode="wallet" class="on">Wallet (raw LNURL)</button>
+      <button data-mode="voucher">Unbank voucher page</button>
+    </div>
+    <p class="hint" id="modeHint" style="margin-bottom:0">Tapping opens the recipient's Lightning wallet directly with the LNURL-withdraw claim.</p>
+  </div>
+
+  <div class="card">
     <div class="row" style="justify-content:space-between">
       <div>
         <label style="margin-bottom:8px">Tag type</label>
@@ -454,10 +463,13 @@ const TAGS={
   215:{pages:135,cc:0x3e, sv:0x11, user:504},
   216:{pages:231,cc:0x6d, sv:0x13, user:888}
 };
-/* Build the NDEF TLV bytes for a URI record carrying `uri` (no prefix code). */
-function ndefUriTlv(uri){
+/* Build the NDEF TLV bytes for a URI record carrying `uri`.
+   prefixCode is the NDEF URI identifier code (0x00 = none, 0x04 = "https://").
+   When a non-zero prefix is used, `uri` must already have that scheme stripped. */
+function ndefUriTlv(uri,prefixCode){
+  prefixCode=prefixCode||0x00;
   const u=new TextEncoder().encode(uri);
-  const payloadLen=u.length+1;           // +1 for URI prefix byte (0x00 = none)
+  const payloadLen=u.length+1;           // +1 for URI prefix byte
   const rec=[];
   const sr=payloadLen<=255;
   rec.push(sr?0xd1:0xc1);                 // MB+ME+(SR)+TNF=well-known
@@ -465,7 +477,7 @@ function ndefUriTlv(uri){
   if(sr) rec.push(payloadLen);
   else rec.push((payloadLen>>>24)&0xff,(payloadLen>>>16)&0xff,(payloadLen>>>8)&0xff,payloadLen&0xff);
   rec.push(0x55);                         // 'U'
-  rec.push(0x00);                         // prefix: none
+  rec.push(prefixCode);                   // URI identifier code
   for(const b of u) rec.push(b);
   // wrap in NDEF-message TLV
   const tlv=[0x03];
@@ -475,7 +487,8 @@ function ndefUriTlv(uri){
   tlv.push(0xfe);                         // terminator
   return tlv;
 }
-function buildNfcFile(uri,tagType){
+function buildNfcFile(uri,tagType,prefixCode){
+  prefixCode=prefixCode||0x00;
   const t=TAGS[tagType];
   const mem=new Uint8Array(t.pages*4);
   // pages 0-2: placeholder UID with VALID BCC bytes (Flipper validates these;
@@ -488,8 +501,11 @@ function buildNfcFile(uri,tagType){
   mem.set([bcc1,0x48,0x00,0x00],8);       // page 2: BCC1, internal, lock0, lock1
   // page 3: capability container
   mem.set([0xe1,0x10,t.cc,0x00],12);
-  // page 4+: NDEF
-  const tlv=ndefUriTlv(uri);
+  // page 4+: NDEF. For prefix 0x04 ("https://") strip the scheme from the
+  // stored bytes (saves 8 bytes on the tag); the reader restores it on read.
+  let body=uri;
+  if(prefixCode===0x04 && body.toLowerCase().startsWith("https://")) body=body.slice(8);
+  const tlv=ndefUriTlv(body,prefixCode);
   const maxUser=t.user; // bytes available from page 4
   if(tlv.length>maxUser) return {tooBig:true,used:tlv.length,cap:maxUser};
   mem.set(tlv,16);
@@ -526,7 +542,7 @@ function buildNfcFile(uri,tagType){
 
 /* ------------------------------- UI wiring ------------------------------- */
 const $=id=>document.getElementById(id);
-let state={tag:216,uri:null,matrix:null,raw:""};
+let state={tag:216,mode:"wallet",uri:null,matrix:null,raw:"",prefixCode:0x00};
 
 function normalizeInput(v){
   v=v.trim();
@@ -577,18 +593,32 @@ function update(){
   }
 
   // final URI to write
-  const usePrefix=$("prefix").checked;
   const core=parsed.lnurl?parsed.lnurl.toUpperCase():parsed.url;
-  state.uri=(usePrefix?"lightning:":"")+core;
+  const mode=state.mode||"wallet";
+  if(mode==="voucher"){
+    // Encode a link to the hosted branded voucher page; it reads ?lnurl=.
+    const voucherBase="https://shanzy39.github.io/Sats-Giveaway-Tag-Writer/voucher.html?lnurl=";
+    const ln=parsed.lnurl?parsed.lnurl.toUpperCase():"";
+    state.uri=voucherBase+encodeURIComponent(ln);
+    state.prefixCode=0x04;                 // "https://" NDEF prefix
+  }else{
+    const usePrefix=$("prefix").checked;
+    state.uri=(usePrefix?"lightning:":"")+core;
+    state.prefixCode=0x00;
+  }
 
   // status
   st.className="status ok";
   st.textContent="\u2713 Valid LNURL"+(warn?"":"")+(looksWithdraw?" \u00b7 looks like a withdraw link":"");
   if(warn){st.className="status warn";st.textContent="\u26a0 Accepted"+warn;}
   else if(!looksWithdraw){st.className="status warn";st.textContent="\u2713 Valid bech32 \u2014 but couldn't confirm it's a *withdraw* link. Double-check the decoded target.";}
+  if(mode==="voucher" && !parsed.lnurl){
+    st.className="status warn";
+    st.textContent="\u26a0 Voucher mode needs an LNURL1 string \u2014 the voucher page reads ?lnurl=. Paste the bech32 LNURL, not a raw URL.";
+  }
 
   dec.style.display="block";
-  dec.innerHTML="<b>Decoded target:</b> "+escapeHtml(decodedUrl)+"<br><b>Writing to tag:</b> "+escapeHtml(state.uri);
+  dec.innerHTML="<b>Decoded target:</b> "+escapeHtml(decodedUrl)+"<br><b>Writing to tag:</b> "+escapeHtml(state.uri)+(mode==="voucher"?"<br><span class='hint' style='margin:6px 0 0'>Tapping opens the branded Unbank voucher page, which shows the amount, QR and wallet buttons.</span>":"");
 
   // QR
   try{
@@ -601,10 +631,13 @@ function update(){
   }
 
   // .nfc fit check + meter
-  const built=buildNfcFile(state.uri,state.tag);
+  const built=buildNfcFile(state.uri,state.tag,state.prefixCode);
   if(built.tooBig){
     meter(built.used,built.cap);
-    $("fitMsg").innerHTML="<span style='color:var(--bad)'>Won't fit on NTAG"+state.tag+" ("+built.used+" / "+built.cap+" bytes). Use a larger tag (216) or a shorter LNURL.</span>";
+    const hint=mode==="voucher"
+      ? "Won't fit on NTAG"+state.tag+" ("+built.used+" / "+built.cap+" bytes). Voucher links are long \u2014 use NTAG215 or NTAG216."
+      : "Won't fit on NTAG"+state.tag+" ("+built.used+" / "+built.cap+" bytes). Use a larger tag (216) or a shorter LNURL.";
+    $("fitMsg").innerHTML="<span style='color:var(--bad)'>"+hint+"</span>";
     $("dlnfc").disabled=true;
     state.nfc=null;
   }else{
@@ -643,12 +676,24 @@ $("seg").addEventListener("click",e=>{
   [...$("seg").children].forEach(c=>c.classList.toggle("on",c===b));
   update();
 });
+$("modeSeg").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;
+  state.mode=b.dataset.mode;
+  [...$("modeSeg").children].forEach(c=>c.classList.toggle("on",c===b));
+  // the lightning: prefix only applies in wallet mode
+  const pf=$("prefix");
+  if(pf){pf.disabled=(state.mode==="voucher");pf.closest("label").style.opacity=state.mode==="voucher"?"0.4":"1";}
+  $("modeHint").textContent=state.mode==="voucher"
+    ? "Tapping opens the branded Unbank voucher page (logo, amount, QR, wallet buttons). Larger payload \u2014 needs NTAG215 or 216."
+    : "Tapping opens the recipient's Lightning wallet directly with the LNURL-withdraw claim.";
+  update();
+});
 $("dlnfc").addEventListener("click",()=>{
   if(!state.nfc)return;
   const blob=new Blob([state.nfc],{type:"text/plain"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download="sats_giveaway_NTAG"+state.tag+".nfc";
+  a.download=(state.mode==="voucher"?"sats_voucher_NTAG":"sats_giveaway_NTAG")+state.tag+".nfc";
   a.click();URL.revokeObjectURL(a.href);
 });
 $("dlpng").addEventListener("click",()=>{
