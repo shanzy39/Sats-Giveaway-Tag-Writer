@@ -325,9 +325,16 @@ const QR=(function(){
   // ---- Speed reveal (no URL scheme; show scan instructions) ----
   wireSpeed();
 
-  // ---- Amount: show ?amt immediately, then live-fetch the real value ----
+  // ---- Amount + live status: show ?amt immediately, then poll the real link ----
   if(amtParam && /^\d+$/.test(amtParam)) setAmount(amtParam);
-  fetchAmount();
+  let claimed=false, pollTimer=null, polls=0;
+  const POLL_MS=4000, MAX_POLLS=150; // stop after ~10 min on an abandoned tab
+  startPolling();
+  // Pause polling when the tab is hidden; re-check immediately on return.
+  document.addEventListener("visibilitychange",function(){
+    if(document.hidden) stopPolling();
+    else if(!claimed){ checkStatus(); startPolling(); }
+  });
 
   /* ------------------------------------------------------------------ */
   function setHref(id,href){const el=$(id);if(el)el.setAttribute("href",href);}
@@ -397,24 +404,55 @@ const QR=(function(){
     });
   }
 
-  function fetchAmount(){
+  function startPolling(){
+    if(pollTimer||claimed) return;
+    checkStatus();
+    pollTimer=setInterval(function(){
+      if(++polls>=MAX_POLLS){ stopPolling(); return; }
+      checkStatus();
+    },POLL_MS);
+  }
+  function stopPolling(){
+    if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+  }
+
+  // Read-only GET of the LNURL-withdraw params. While uses remain LNbits returns
+  // {maxWithdrawable,...}; once fully spent it returns {status:"ERROR",...}. This
+  // request never consumes a use (the actual withdrawal is a separate callback).
+  function checkStatus(){
     let url;
     try{ url=lnurlToUrl(lnurlUpper); }
     catch(e){ return; }
-    fetch(url,{method:"GET"})
+    fetch(url,{method:"GET",cache:"no-store"})
       .then(r=>r.json())
       .then(j=>{
         if(j && typeof j.maxWithdrawable==="number"){
-          const sats=Math.floor(j.maxWithdrawable/1000);
-          setAmount(sats);
+          setAmount(Math.floor(j.maxWithdrawable/1000));
         }else if(j && j.status==="ERROR"){
-          // Spent / expired link.
-          const el=$("amtNum");
-          if(el){el.textContent="—";}
-          const cap=document.querySelector(".qr-cap");
-          if(cap) cap.innerHTML="This voucher may already be <b>claimed or expired</b>.";
+          showClaimed(j.reason||"");
         }
       })
-      .catch(()=>{ /* tunnel down / CORS: keep ?amt or neutral placeholder */ });
+      .catch(()=>{ /* tunnel down / CORS / offline: keep current UI, never falsely claim */ });
+  }
+
+  // Flip the page into the "claimed / spent" state (clear, single source of truth).
+  function showClaimed(reason){
+    if(claimed) return;
+    claimed=true;
+    stopPolling();
+    const card=$("card");
+    if(card) card.classList.add("spent");
+    // If the link loaded already-spent we never learned the amount, so the
+    // placeholder ("…") is meaningless — hide it. Keep a real amount (dimmed).
+    const num=$("amtNum");
+    if(num && /^[\s…—-]*$/.test(num.textContent)){
+      const amt=$("amount"); if(amt) amt.style.display="none";
+    }
+    const sub=$("claimedSub");
+    if(sub){
+      sub.textContent = /expir/i.test(reason)
+        ? "This voucher has expired."
+        : "These sats have already been redeemed.";
+    }
   }
 })();
